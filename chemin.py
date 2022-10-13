@@ -1,29 +1,37 @@
-from tabnanny import check
-from turtle import position
+import sys
 import numpy as np
-import string
 import math
 import random
+from tqdm import tqdm
+
+# Paramètres du script
+games = 1000 # Nombres de parties à simuler
+maxCards = 4 # Nombre de cartes sur la ligne du milieu
+debug = False # Affichage des prints
+
+# Si on a au moins 1 argument
+if len(sys.argv) >= 2:
+    games = int(sys.argv[1]) # On met à jour le nombre de games
+if len(sys.argv) >= 3: # Si 3 arguments
+    maxCards = int(sys.argv[2]) # On met à jour le nombre de cartes max
 
 
-nbGames = 0
-nbGorgees = 0
-nbFigures = 0
-nbWin = 0
-nbLoses = 0
-
-games = 20
-
+# - - Classe d'un jeu de cartes - -
 # Création d'un jeu de 52 cartes
 # Possibilité de tirer une carte du jeu
 # Affichage des cartes restantes
+# Sortie du nombre de cartes restantes
 class Jeu:
 
-    cleanState = []
     remainingCards = []
 
     # Création du jeu de cartes
     def __init__(self):
+
+        # On redéfinit la variable pour pouvoir
+        # reset les instances de classes sans souci
+        self.remainingCards = []
+
         # Pour chaque couleur
         for couleur in ["Coeur", "Carreau", "Pique", "Trèfle"]:
             # On donne une valeur (11=V, 12=D, 13=R, 14=As)
@@ -31,7 +39,6 @@ class Jeu:
                 self.remainingCards.append([valeur, couleur])
         # Mélange des cartes, pour éviter des problèmes de récurrence
         random.shuffle(self.remainingCards)
-        self.cleanState = self.remainingCards
     
     # Choix d'une carte aléatoire et suppression de cette dernière
     # du jeu
@@ -45,33 +52,47 @@ class Jeu:
     def showRemainingCards(self):
         print(self.remainingCards)
 
-    def reset(self):
-        self.remainingCards = self.cleanState
-        random.shuffle(self.remainingCards)
 
-
-# Classe du jeu du chemin
+# - - Classe du jeu du chemin - -
 # Création du chemin
 # Inversion du chemin
+# Changement auto du sens du chemin en fonction de ses variables
 # Affichage
+# Affichage de l'inverse (sans inverser le jeu)
 # Initialisation du jeu
-# Jouer un tour normal du jeu
+# Retourner une carte
+# Se déplacer sur le chemin
 class Chemin:
 
     etages: int # Nombre de cartes au milieu du chemin
     position = [0,0]
 
     cartes = [[]]
-    jeu = Jeu()
     currentTurnCards = 0
     currentFigures = 0
 
     direction = 0
 
     gorgees = 0
+    listeGorgees = []
 
     # Création du chemin
-    def __init__(self, size:int):
+    def __init__(self, size:int, jeu:Jeu):
+
+        # On redéfinit toutes les variables pour pouvoir
+        # reset les instances de classes sans souci
+        self.position = [0,0]
+
+        self.cartes = [[]]
+        self.currentTurnCards = 0
+        self.currentFigures = 0
+
+        self.direction = 0
+
+        self.gorgees = 0
+        self.listeGorgees = []
+
+        self.jeu = jeu
         self.etages = size
 
         # Première moitié
@@ -94,40 +115,7 @@ class Chemin:
         # Bug à résoudre dans le futur, pas si grave dans l'état
         self.cartes.pop(len(self.cartes)-1)
 
-    def reset(self, etages:int):
-
-        self.etages = etages
-
-        self.position = [0,0]
-
-        self.cartes = [[]]
-        self.jeu.reset()
-        self.currentTurnCards = 0
-        self.currentFigures = 0
-
-        self.direction = 0
-
-        self.gorgees = 0
-
-        # Première moitié
-        for i in range(etages):
-            # On rajoute une ligne de cartes
-            self.cartes.append([])
-            # Et on ajoute le bon nombre de cartes à cette ligne
-            for k in range(i+1):
-                self.cartes[i].append(self.jeu.pickCard())
-
-        # Seconde moitié, même principe
-        midCursor = etages-1
-        for g in range(etages-1, 0, -1):
-            self.cartes.append([])
-            midCursor = midCursor+1
-            for k in range(g):
-                self.cartes[midCursor].append(self.jeu.pickCard())
-        
-        # On supprime la dernière ligne qui est vide
-        # Bug à résoudre dans le futur, pas si grave dans l'état
-        self.cartes.pop(len(self.cartes)-1)
+    
 
     # Inversion du sens du chemin
     # On crée le miroir de la liste de cartes
@@ -169,41 +157,43 @@ class Chemin:
         if self.position == [0, 0]:
             # Si on commence en "bas" du chemin
             if pos == "bot" or pos == 1:
-                print("Starting bot")
+                if debug: print("Starting bot")
                 # On actualise le sens du chemin
                 self.setDirection(1)
                 return 0
             # Si on commence en haut, idem
             elif pos == "top" or pos == 2:
-                print("starting top")
+                if debug: print("starting top")
                 self.setDirection(-1)
                 return 0
             else:
                 print("Wrong argument, got : ", pos)
                 return 1
         else:
-            print("Une partie est déja lancée !")
+            if debug: print("Une partie est déja lancée !")
             return 1
 
     # Retourner une carte
     def checkCard(self):
-        print(f"La carte est un {self.cartes[self.position[0]][self.position[1]]} !")
+        if debug: print(f"Position : {self.position}")
+        if debug: print(f"La carte est un {self.cartes[self.position[0]][self.position[1]]} !")
         # On a retourné une carte donc on incrémente
         self.currentTurnCards = self.currentTurnCards + 1
         # Si on a retourné une figure
         if self.cartes[self.position[0]][self.position[1]][0] > 10:
-            print("Figure !")
+            if debug: print("Figure !")
             # On rajoute les gorgées à boire
             self.gorgees = self.gorgees + self.currentTurnCards
+            # Logging pour les stats à la fin
+            self.listeGorgees.append(self.currentTurnCards)
             self.currentTurnCards = 0 # Reset du nb de cartes retournées
             # On compte la figure retournée
             self.currentFigures = self.currentFigures + 1
             
             
-        
         # Si on est au bout du chemin
         elif self.position[0] == (self.etages-1)*2:
-            print("Le jeu est fini ! (Gagné)")
+            if debug: print("Le jeu est fini ! (Gagné)")
             #print(f"Gorgées bues : {self.gorgees} en {self.currentFigures} figures, soit ~{self.gorgees/max(self.currentFigures, 1)} gorgées/figure.")
             return 2
 
@@ -212,29 +202,34 @@ class Chemin:
         if self.jeu.getCardCount() > 0:
             # On remplace la carte retournée
             self.cartes[self.position[0]][self.position[1]] = self.jeu.pickCard()
-
+            # Si c'est la première carte
             if self.currentTurnCards == 0:
                 self.position = [0, 0] # On repart du début
                 return 1
             else:
                 return 0
         else:
-            print("Le jeu est fini ! (Perdu)")
+            if debug: print("Le jeu est fini ! (Perdu)")
             #print(f"Gorgées bues : {self.gorgees} en {self.currentFigures} figures, soit ~%.2f gorgées/figure.", self.gorgees/max(self.currentFigures, 1))
             return 3
         
         
 
     def step(self, d):
+
+        # Pour chaque direction on différencie 3 cas determinés par 2 conditions :
+        # Es-ce que la carte en cours est avant l'étage du milieu
+        # Si ce n'est pas le cas, es-ce qu'elle est déjà sur le
+        # bord du chemin, et ne peut donc pas le dépasser.
         
         # Droite
         if d == 'd' or d == 'D' or d == 'r' or d == 'R' or d == 2:
-            print("Going right")
+            if debug: print("Going right")
             # Si on a passé le milieu
             if self.position[0] >= self.etages - 1:
                 # Et qu'on est déja tout à droite du chemin
                 if self.position[1] == 0:
-                    print("Impossible d'aller à droite")
+                    if debug: print("Impossible d'aller à droite")
                     return 1
                 # Sinon on peut aller à droite
                 else:
@@ -249,12 +244,12 @@ class Chemin:
         
         # Gauche
         elif d == 'g' or d == 'G' or d == 'l' or d == 'L' or d == 1:
-            print("Going left")
+            if debug: print("Going left")
             # Si on a passé le milieu
             if self.position[0] >= self.etages - 1:
                 # Et qu'on est déja tout à gauche du chemin
                 if self.position[1] == ((self.etages-1)*2)-self.position[0]:
-                    print("Impossible d'aller à gauche")
+                    if debug: print("Impossible d'aller à gauche")
                     return 1
                 # Sinon on peut aller à gauche
                 else:
@@ -272,54 +267,87 @@ class Chemin:
             print("Wrong direction, need (D/R) or (G/L), got ", d)
             return 1
 
-
+# Fonctionnement normal
 print(f"- - PLAYING {games} GAMES - -")
 
-leChemin = Chemin(4)
+# Variables pour les stats
+nbGames = 0
+nbGorgees = 0
+nbFigures = 0
+nbWin = 0
+nbLoses = 0
+nbGorgeesParLigne = []
 
-while nbGames < games:
-    
-    if nbGames % 10 == 0:
-        print(f"{nbGames} games efffectuées...")
+# Initialisation du jeu de cartes et du chemin
+jeu = Jeu()
+leChemin = Chemin(4, jeu)
 
-    leChemin.reset(4)
-    checkC = 0
+# tqdm pour avoir une barre de progression
+for k in tqdm(range(games)):
+   
+    checkC = 0 # Permet de savoir si la partie en cours est finie
 
-    while checkC < 2:
-        leChemin.showState()
+    while checkC < 2: # Tant que la partie n'est pas finie
+        if debug: leChemin.showState()
+        # On prend un sens au hasard
         direction = np.random.randint(1, 3)
 
+        # Et on continue d'en prendre un au hasard tant
+        # qu'elle n'est pas valide
         while leChemin.start(direction) == 1:
             direction = np.random.randint(1, 3)
 
+        # On retourne la carte choisie, en mettant à jour le flag
         checkC = leChemin.checkCard()
+
+        # Et tant qu'on ne tombe pas sur une figure on avance
         while checkC == 0:
 
-            leChemin.showState()
-            
+            if debug: leChemin.showState()
+            # Choix d'une direction au hasard
             dg = np.random.randint(1, 3)
+            # Et on continue d'en prendre une au hasard
+            # tant qu'elle n'est pas valide
             while leChemin.step(dg) == 1:
                 dg = np.random.randint(1, 3)
             
+            # On retourne la carte en mettant à jour le flag
             checkC = leChemin.checkCard()
-            print(leChemin.position)
+            if debug: print(leChemin.position)
     
-    nbGames = nbGames + 1
-
+    # Si on a gagné
     if checkC == 2:
-        nbWin = nbWin + 1
+        nbWin = nbWin + 1 # Màj du nb de victoires
 
+    # Màj des compteurs pour les stats
     nbFigures = nbFigures + leChemin.currentFigures
     nbGorgees = nbGorgees + leChemin.gorgees
+    nbGorgeesParLigne.append(leChemin.listeGorgees)
+
+    # Reset du jeu de cartes et du chemin
+    jeu = Jeu()
+    leChemin = Chemin(maxCards, jeu)
 
     
+# Calcul des stats des parties
+avgWin = nbWin/games # Taux de victoire
+avgGorgees = nbGorgees/games # Moyenne des gorgées / partie
+nbLignes = 0
 
+# Calcul du nombre de lignes
+for game in nbGorgeesParLigne:
+    nbLignes = nbLignes + len(game)
 
+avgLignePerGame = nbLignes / games # Moy du nb de lignes / partie
+avgGorPerLigne = nbGorgees / nbLignes # Moy du nb de gorgées / ligne
 
+# Output
 print("")
 print("- - RÉSULTATS - -")
-print(f"> Parties jouées : {nbGames}")
-print(f"> Taux de victoire : %.2f ({nbWin}/{nbGames})", nbWin/nbGames)
+print(f"> Parties jouées : {games}")
+print('> Taux de victoire : %5.2f (%2d/%2d)' % (avgWin, nbWin, games))
 print(f"> Gorgées bues : {nbGorgees}")
-print("> Moyenne de gorgées par partie : %.2f", nbGorgees/nbGames)
+print("> Moyenne de gorgées par partie : %5.2f" % (avgGorgees))
+print("> Moyenne de lignes faites par partie : %5.2f" % avgLignePerGame)
+print("> Moyenne de gorgees par ligne : %5.2f" % avgGorPerLigne)
 
